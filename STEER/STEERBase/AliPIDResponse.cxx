@@ -610,7 +610,7 @@ void AliPIDResponse::InitialiseEvent(AliVEvent *event, Int_t pass, TString recoP
   }
 
   // Set up TPC multiplicity for PbPb
-  if (fUseTPCMultiplicityCorrection) {
+  if (fUseTPCMultiplicityCorrection || GetTPCResponse().GetEnableMultSplines()) {
     Int_t numESDtracks = event->GetNumberOfESDTracks();
     if (numESDtracks < 0) {
       AliError("Cannot obtain event multiplicity (number of ESD tracks < 0). If you are using AODs, this might be a too old production. Please disable the multiplicity correction to get a reliable PID result!");
