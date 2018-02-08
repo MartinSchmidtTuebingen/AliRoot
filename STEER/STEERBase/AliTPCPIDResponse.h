@@ -29,6 +29,7 @@
 class TH2D;
 class TSpline3;
 class AliOADBContainer;
+class TArrayI;
 
 class AliTPCPIDResponse: public TNamed {
 public:
@@ -93,6 +94,9 @@ public:
   void SetMaxBadLengthFraction(Float_t f) {fMaxBadLengthFraction=f;}
 
   void SetMagField(Double_t mf) { fMagField=mf; }
+  
+  void SetEnableMultSplines(Bool_t flag) {fEnableMultSplines=flag;}
+  Bool_t GetEnableMultSplines() {return fEnableMultSplines;}
   
   const TH2D* GetEtaCorrMap() const { return fhEtaCorr; };
   Bool_t SetEtaCorrMap(TH2D* hMap);
@@ -174,6 +178,7 @@ public:
   void SetResponseFunction(TObject* o,
                            AliPID::EParticleType type,
                            ETPCgainScenario gainScenario);
+  
   void Print(Option_t* option="") const;
   TSpline3* GetResponseFunction( AliPID::EParticleType species,
                                  ETPCgainScenario gainScenario ) const;
@@ -244,7 +249,7 @@ public:
                       const char* oadbFile="$ALICE_PHYSICS/OADB/COMMON/PID/data/TPCPIDResponseOADB.root",
                       Bool_t initMultiplicityCorrection=kTRUE);
 
-  Bool_t SetSplinesFromArray                (const TObjArray* arrSplines);
+  Bool_t SetSplinesFromArray                (const TObjArray* arrSplines, TObjArray* targetarray = 0x0);
   Bool_t SetMultiplicityCorrectionFromString(const TString& multiplicityData);
   Bool_t SetdEdxTypeFromString              (const TString& dEdxTypeSet);
   Bool_t SetdEdxResolutionFromString        (const TString& dEdxTypeSet);
@@ -287,6 +292,9 @@ private:
 
   Bool_t fUseDatabase; // flag if fine-tuned database-response or simple ALEPH BB should be used
   
+  Bool_t fEnableMultSplines;
+  TArrayI* fMultBins;
+  TObjArray fMultResponseFunctions;
   TObjArray fResponseFunctions; //! ObjArray of response functions individually for each particle
   AliOADBContainer* fOADBContainer; //! OADB container with response functions
   TVectorF fVoltageMap; //!stores a map of voltages wrt nominal for all chambers
