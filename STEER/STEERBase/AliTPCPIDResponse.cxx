@@ -45,6 +45,7 @@
 #include "AliOADBContainer.h"
 #include "TFile.h"
 #include "TSpline.h"
+#include "TArrayI.h"
 
 ClassImp(AliTPCPIDResponse);
 
@@ -71,6 +72,9 @@ AliTPCPIDResponse::AliTPCPIDResponse():
   fKp4(2.12543),
   fKp5(4.88663),
   fUseDatabase(kFALSE),
+  fEnableMultSplines(kFALSE),
+  fMultBins(0x0),
+  fMultResponseFunctions(0),
   fResponseFunctions(fgkNumberOfParticleSpecies*fgkNumberOfGainScenarios),
   fOADBContainer(0x0),
   fVoltageMap(72),
@@ -111,7 +115,7 @@ AliTPCPIDResponse::AliTPCPIDResponse():
   fCorrFuncSigmaMultiplicity = new TF1("fCorrFuncSigmaMultiplicity",
                                        "TMath::Max(0.0, [0] + [1]*TMath::Min(x, [3]) + [2] * TMath::Power(TMath::Min(x, [3]), 2))", 0., 0.2);
 
-  
+  fMultBins = new TArrayI(0);
   ResetMultiplicityCorrectionFunctions();
   fgInstance=this;
 }
@@ -171,6 +175,9 @@ AliTPCPIDResponse::~AliTPCPIDResponse()
   if (fgInstance==this) fgInstance=0;
 
   delete fOADBContainer;
+  
+  delete fMultBins;
+  
 }
 
 
@@ -186,6 +193,9 @@ AliTPCPIDResponse::AliTPCPIDResponse(const AliTPCPIDResponse& that):
   fKp4(that.fKp4),
   fKp5(that.fKp5),
   fUseDatabase(that.fUseDatabase),
+  fEnableMultSplines(that.fEnableMultSplines),
+  fMultBins(that.fMultBins),
+  fMultResponseFunctions(that.fMultResponseFunctions),
   fResponseFunctions(that.fResponseFunctions),
   fOADBContainer(0x0),
   fVoltageMap(that.fVoltageMap),
@@ -252,6 +262,9 @@ AliTPCPIDResponse& AliTPCPIDResponse::operator=(const AliTPCPIDResponse& that)
   fKp4=that.fKp4;
   fKp5=that.fKp5;
   fUseDatabase=that.fUseDatabase;
+  fEnableMultSplines=that.fEnableMultSplines;
+  fMultBins=that.fMultBins;
+  fMultResponseFunctions=that.fMultResponseFunctions;
   fResponseFunctions=that.fResponseFunctions;
   fOADBContainer=0x0;
   fVoltageMap=that.fVoltageMap;
@@ -546,7 +559,7 @@ void AliTPCPIDResponse::ResetSplines()
 }
 //_________________________________________________________________________
 Int_t AliTPCPIDResponse::ResponseFunctionIndex( AliPID::EParticleType species,
-                                                ETPCgainScenario gainScenario ) const
+                                                ETPCgainScenario gainScenario) const
 {
   //get the index in fResponseFunctions given type and scenario
   return Int_t(species)+Int_t(gainScenario)*fgkNumberOfParticleSpecies;
@@ -555,7 +568,7 @@ Int_t AliTPCPIDResponse::ResponseFunctionIndex( AliPID::EParticleType species,
 //_________________________________________________________________________
 void AliTPCPIDResponse::SetResponseFunction( TObject* o,
                                              AliPID::EParticleType species,
-                                             ETPCgainScenario gainScenario )
+                                             ETPCgainScenario gainScenario)
 {
   fResponseFunctions.AddAtAndExpand(o,ResponseFunctionIndex(species,gainScenario));
 }
@@ -720,6 +733,7 @@ Bool_t AliTPCPIDResponse::ResponseFunctiondEdxN( const AliVTrack* track,
   // and preferred source of dedx.
   // returns true on success
   
+  TObject* obj = 0x0;
   
   if (dedxSource == kdEdxDefault) {
     // Fast handling for default case. In addition: Keep it simple (don't call additional functions) to
@@ -736,74 +750,86 @@ Bool_t AliTPCPIDResponse::ResponseFunctiondEdxN( const AliVTrack* track,
     nPoints = track->GetTPCsignalN();
     gainScenario = kDefault;
     
-    TObject* obj = fResponseFunctions.UncheckedAt(ResponseFunctionIndex(species,gainScenario));
-    *responseFunction = dynamic_cast<TSpline3*>(obj); //TODO:maybe static cast?
-  
-    return kTRUE;
-  }
-  
-  //TODO Proper handle of tuneMConData for other dEdx sources
-  
-  Double32_t signal[4]; //0: IROC, 1: OROC medium, 2:OROC long, 3: OROC all (def. truncation used)
-  Char_t ncl[3];        //same
-  Char_t nrows[3];      //same
-  AliTPCdEdxInfo dEdxInfo;
-  bool dEdxInfoOK = track->GetTPCdEdxInfo( dEdxInfo );
-  
-  if (!dEdxInfoOK && dedxSource!=kdEdxDefault)  //in one case its ok if we dont have the info
-  {
-    AliError("AliTPCdEdxInfo not available");
-    return kFALSE;
-  }
-
-  if (dEdxInfoOK) dEdxInfo.GetTPCSignalRegionInfo(signal,ncl,nrows);
-
-  //check if we cross a bad OROC in which case we reject
-  EChamberStatus trackOROCStatus = TrackStatus(track,2);
-  if (trackOROCStatus==kChamberOff || trackOROCStatus==kChamberLowGain)
-  {
-    return kFALSE;
-  }
-
-  switch (dedxSource)
-  {
-    case kdEdxOROC:
-      {
-        if (trackOROCStatus==kChamberInvalid) return kFALSE; //never reached OROC
-        dEdx = signal[3];
-        nPoints = ncl[2]+ncl[1];
-        gainScenario = kOROChigh;
-        break;
+    if (fEnableMultSplines && fCurrentEventMultiplicity > 0) {
+      Int_t i=0;
+      // Loop through the Mult Bins until the current multiplicity is larger than the upper edge - then dont increase the bin Number and take the appropriate array
+      while (i < fMultResponseFunctions.GetEntriesFast() && fCurrentEventMultiplicity > fMultBins->At(2*i+1)) {
+        i++;
       }
-    case kdEdxHybrid:
-      {
-        //if we cross a bad IROC we use OROC dedx, if we dont we use combined
-        EChamberStatus status = TrackStatus(track,1);
-        if (status!=kChamberHighGain)
+      TObjArray* arr = (TObjArray*)fMultResponseFunctions.UncheckedAt(i);
+      if (!arr)
+        obj = fResponseFunctions.UncheckedAt(ResponseFunctionIndex(species,gainScenario));
+    }
+    //Default case
+    if (!obj) {
+      obj = fResponseFunctions.UncheckedAt(ResponseFunctionIndex(species,gainScenario));
+    }
+  }
+  else {
+    //TODO Proper handle of tuneMConData for other dEdx sources
+    
+    Double32_t signal[4]; //0: IROC, 1: OROC medium, 2:OROC long, 3: OROC all (def. truncation used)
+    Char_t ncl[3];        //same
+    Char_t nrows[3];      //same
+    AliTPCdEdxInfo dEdxInfo;
+    bool dEdxInfoOK = track->GetTPCdEdxInfo( dEdxInfo );
+    
+    if (!dEdxInfoOK && dedxSource!=kdEdxDefault)  //in one case its ok if we dont have the info
+    {
+      AliError("AliTPCdEdxInfo not available");
+      return kFALSE;
+    }
+
+    if (dEdxInfoOK) dEdxInfo.GetTPCSignalRegionInfo(signal,ncl,nrows);
+
+    //check if we cross a bad OROC in which case we reject
+    EChamberStatus trackOROCStatus = TrackStatus(track,2);
+    if (trackOROCStatus==kChamberOff || trackOROCStatus==kChamberLowGain)
+    {
+      return kFALSE;
+    }
+
+    switch (dedxSource)
+    {
+      case kdEdxOROC:
         {
+          if (trackOROCStatus==kChamberInvalid) return kFALSE; //never reached OROC
           dEdx = signal[3];
           nPoints = ncl[2]+ncl[1];
           gainScenario = kOROChigh;
+          break;
         }
-        else
+      case kdEdxHybrid:
         {
-//           dEdx = track->GetTPCsignal();
-          dEdx = GetTrackdEdx(track);
-          nPoints = track->GetTPCsignalN();
-          gainScenario = kALLhigh;
+          //if we cross a bad IROC we use OROC dedx, if we dont we use combined
+          EChamberStatus status = TrackStatus(track,1);
+          if (status!=kChamberHighGain)
+          {
+            dEdx = signal[3];
+            nPoints = ncl[2]+ncl[1];
+            gainScenario = kOROChigh;
+          }
+          else
+          {
+  //           dEdx = track->GetTPCsignal();
+            dEdx = GetTrackdEdx(track);
+            nPoints = track->GetTPCsignalN();
+            gainScenario = kALLhigh;
+          }
+          break;
         }
-        break;
-      }
-    default:
-      {
-         dEdx = 0.;
-         nPoints = 0;
-         gainScenario = kGainScenarioInvalid;
-         return kFALSE;
-      }
+      default:
+        {
+          dEdx = 0.;
+          nPoints = 0;
+          gainScenario = kGainScenarioInvalid;
+          return kFALSE;
+        }
+    }
+    TObject* obj = fResponseFunctions.UncheckedAt(ResponseFunctionIndex(species,gainScenario));
   }
-  TObject* obj = fResponseFunctions.UncheckedAt(ResponseFunctionIndex(species,gainScenario));
-  *responseFunction = dynamic_cast<TSpline3*>(obj); //TODO:maybe static cast?
+  
+  *responseFunction = static_cast<TSpline3*>(obj); 
   
   return kTRUE;
 }
@@ -1708,14 +1734,44 @@ Bool_t AliTPCPIDResponse::InitFromOADB(const Int_t run, const Int_t pass, TStrin
   fResponseFunctions.Clear();
   SetUseDatabase(kFALSE);
 
-  const TObjArray *arrSplines = static_cast<TObjArray*>(arr->FindObject("Splines"));
-  if (!arrSplines) {
-    AliError("***** Risk for unreliable TPC PID detected:                      ********");
-    AliError(Form("      could not find array of splines for run %d", run));
-    AliError(     "      This should not happen, plese report");
-    return kFALSE;
+  TH1I* hMultBins = static_cast<TH1I*>(arr->FindObject("hMultBins"));
+  
+  // Set Splines for different multiplicities if present and required 
+  if (hMultBins) {
+    fMultBins->Set(hMultBins->GetXaxis()->GetNbins());
+    for (Int_t i=1;i<=hMultBins->GetXaxis()->GetNbins();++i) {
+      fMultBins->AddAt(hMultBins->GetBinContent(i),i-1);
+    }
+    fMultResponseFunctions.SetOwner(kTRUE);
+    for (Int_t i=0;i<TMath::FloorNint(fMultBins->GetSize()/2 + 0.01);i++) {
+      TObjArray* multSplineArray = new TObjArray();
+      TObjArray* arrSplines = static_cast<TObjArray*>(arr->FindObject(TString::Format("TPCSplines_%i_%i",fMultBins->At(2*i),fMultBins->At(2*i+1)).Data()));
+      SetSplinesFromArray(arrSplines, multSplineArray);
+      fMultResponseFunctions.AddAtAndExpand(multSplineArray,i);
+      if (i==0) {
+        //Set first as standard splines
+        SetSplinesFromArray(arrSplines);
+      }
+    }
+    for (Int_t i=1;i<fMultBins->GetSize()-1;i=i+2) {
+      Int_t mid = TMath::FloorNint((fMultBins->At(i) + fMultBins->At(i+1))/2.0);
+      fMultBins->AddAt(mid,i);
+      fMultBins->AddAt(mid,i+1);
+    }
+    fMultBins->AddAt(1000000,fMultBins->GetSize()-1);
+    hMultBins = 0x0;
+    SetEnableMultSplines(kTRUE);
   }
-  SetSplinesFromArray(arrSplines);
+  else {
+    const TObjArray *arrSplines = static_cast<TObjArray*>(arr->FindObject("Splines"));
+    if (!arrSplines) {
+      AliError("***** Risk for unreliable TPC PID detected:                      ********");
+      AliError(Form("      could not find array of splines for run %d", run));
+      AliError(     "      This should not happen, plese report");
+      return kFALSE;
+    }
+    SetSplinesFromArray(arrSplines);
+  }
 
   //===| Set up multiplicity correction |=======================================
   if (initMultiplicityCorrection) {
@@ -1749,11 +1805,18 @@ Bool_t AliTPCPIDResponse::InitFromOADB(const Int_t run, const Int_t pass, TStrin
 }
 
 //______________________________________________________________________________
-Bool_t AliTPCPIDResponse::SetSplinesFromArray(const TObjArray* arrSplines)
+Bool_t AliTPCPIDResponse::SetSplinesFromArray(const TObjArray* arrSplines, TObjArray* targetarray)
 {
   // Set up internal spline array from order array of splines 'arrSplines'
   // arrSplines is assumes to have the splines for the single particles inc
   // the numbered position as given by AliPID::EParticleType
+  
+  if (!arrSplines) {
+      AliError("***** Risk for unreliable TPC PID detected: ********");
+      AliError("      No spline array found, this should not happen, please report");
+      return kFALSE;
+  }      
+    
 
   //---| get default splines for missing species |------------------------------
   TObject *protonSpline = arrSplines->At(AliPID::kProton  );
@@ -1783,7 +1846,12 @@ Bool_t AliTPCPIDResponse::SetSplinesFromArray(const TObjArray* arrSplines)
       continue;
     }
     SetUseDatabase(kTRUE);
-    SetResponseFunction((AliPID::EParticleType)ispecie, responseFunction);
+    if (targetarray) {
+      targetarray->AddAtAndExpand(responseFunction,(Int_t)ispecie);
+    }
+    else {
+      SetResponseFunction((AliPID::EParticleType)ispecie, responseFunction);
+    }
     AliInfo(Form("Adding spline: %d - %s (MD5(spline) = %s)",ispecie,responseFunction->GetName(),
                  GetChecksum(responseFunction).Data()));
 
