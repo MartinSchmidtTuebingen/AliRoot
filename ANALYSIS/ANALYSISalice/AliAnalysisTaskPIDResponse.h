@@ -52,6 +52,8 @@ public:
   void SetUseTPCMultiplicityCorrection(Bool_t useMultiplicityCorrection = kTRUE) { fUseTPCMultiplicityCorrection = useMultiplicityCorrection; };
   Bool_t UseTPCMultiplicityCorrection() const { return fUseTPCMultiplicityCorrection; };
 
+  void SetEnableMultSplines(Bool_t enableMultSplines = kTRUE) { fEnableMultSplines = enableMultSplines; };
+  Bool_t EnableMultSplines() const { return fEnableMultSplines; };  
 
   void SetUseTRDEtaCorrection(Bool_t useTRDEtaCorrection) { fUseTRDEtaCorrection = useTRDEtaCorrection; };
   Bool_t UseTRDEtaCorrection() const { return fUseTRDEtaCorrection; };
@@ -86,6 +88,7 @@ private:
   
   Bool_t fUseTPCEtaCorrection;          // Use TPC eta correction
   Bool_t fUseTPCMultiplicityCorrection; // Use TPC multiplicity correction
+  Bool_t fEnableMultSplines;            // Use different splines for multiplicities, if possible
   Bool_t fUseTRDEtaCorrection;          // Use TRD eta correction
   Bool_t fUseTRDClusterCorrection;      // Use TRD cluster correction
   Bool_t fUseTRDCentralityCorrection;   // Use TRD centrality correction
