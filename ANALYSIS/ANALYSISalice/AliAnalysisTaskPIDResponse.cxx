@@ -176,6 +176,7 @@ void AliAnalysisTaskPIDResponse::UserExec(Option_t */*option*/)
 
     fPIDResponse->SetUseTPCEtaCorrection(fUseTPCEtaCorrection);
     fPIDResponse->SetUseTPCMultiplicityCorrection(fUseTPCMultiplicityCorrection);
+    fPIDResponse->GetTPCResponse().SetEnableMultSplines(EnableMultSplines());
 
     fPIDResponse->SetUseTRDEtaCorrection(fUseTRDEtaCorrection);
     fPIDResponse->SetUseTRDClusterCorrection(fUseTRDClusterCorrection);

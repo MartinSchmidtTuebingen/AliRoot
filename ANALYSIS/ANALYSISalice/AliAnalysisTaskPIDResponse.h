@@ -48,6 +48,8 @@ public:
   void SetUseTPCMultiplicityCorrection(Bool_t useMultiplicityCorrection = kTRUE) { fUseTPCMultiplicityCorrection = useMultiplicityCorrection; };
   Bool_t UseTPCMultiplicityCorrection() const { return fUseTPCMultiplicityCorrection; };
 
+  void SetEnableMultSplines(Bool_t enableMultSplines = kTRUE) { fEnableMultSplines = enableMultSplines; };
+  Bool_t EnableMultSplines() const { return fEnableMultSplines; };  
 
   void SetUseTRDEtaCorrection(Bool_t useTRDEtaCorrection) { fUseTRDEtaCorrection = useTRDEtaCorrection; };
   Bool_t UseTRDEtaCorrection() const { return fUseTRDEtaCorrection; };
@@ -64,30 +66,31 @@ public:
   ULong_t GetRandomSeed() const { return fRandomSeed; }
 
 private:
-  Bool_t fIsMC;                        ///< If we run on MC data
-  Bool_t fCachePID;                    ///< Cache PID values in transient object
-  TString fOADBPath;                   ///< OADB path to use
-  TString fSpecialDetResponse;         ///< Special detector response files for debugging
-  TString fRecoPassName;               //!<! Full name of the reco pass
-  TString fRecoPassNameTuned;          ///< Full name of the reco pass used for tuning to MC
+  Bool_t fIsMC;                        // If we run on MC data
+  Bool_t fCachePID;                    // Cache PID values in transient object
+  TString fOADBPath;                   // OADB path to use
+  TString fSpecialDetResponse;         // Special detector response files for debugging
+  TString fRecoPassName;               //! Full name of the reco pass
+  TString fRecoPassNameTuned;          // Full name of the reco pass used for tuning to MC
   
-  AliPIDResponse *fPIDResponse;        //!<! PID response Handler
-  Int_t   fRun;                        //!<! current run number
-  Int_t   fOldRun;                     //!<! current run number
-  Int_t   fRecoPass;                   //!<! reconstruction pass
+  AliPIDResponse *fPIDResponse;        //! PID response Handler
+  Int_t   fRun;                        //! current run number
+  Int_t   fOldRun;                     //! current run number
+  Int_t   fRecoPass;                   //! reconstruction pass
 
-  Bool_t  fIsTunedOnData;              ///< flag to tune MC on data (dE/dx)
-  Int_t   fTunedOnDataMask;            ///< mask to activate tuning on data on specific detectors
-  Int_t   fRecoPassTuned;              ///< Reco pass tuned on data for MC
+  Bool_t  fIsTunedOnData;              // flag to tune MC on data (dE/dx)
+  Int_t   fTunedOnDataMask;            // mask to activate tuning on data on specific detectors
+  Int_t   fRecoPassTuned;              // Reco pass tuned on data for MC
   
-  Bool_t fUseTPCEtaCorrection;          ///< Use TPC eta correction
-  Bool_t fUseTPCMultiplicityCorrection; ///< Use TPC multiplicity correction
-  Bool_t fUseTRDEtaCorrection;          ///< Use TRD eta correction
-  Bool_t fUseTRDClusterCorrection;      ///< Use TRD cluster correction
-  Bool_t fUseTRDCentralityCorrection;   ///< Use TRD centrality correction
+  Bool_t fUseTPCEtaCorrection;          // Use TPC eta correction
+  Bool_t fUseTPCMultiplicityCorrection; // Use TPC multiplicity correction
+  Bool_t fEnableMultSplines;            // Use different splines for multiplicities, if possible
+  Bool_t fUseTRDEtaCorrection;          // Use TRD eta correction
+  Bool_t fUseTRDClusterCorrection;      // Use TRD cluster correction
+  Bool_t fUseTRDCentralityCorrection;   // Use TRD centrality correction
 
-  Int_t  fUserDataRecoPass;            ///< forced DATA reco pass
-  ULong_t fRandomSeed;                 ///< random seed required for tune on data, 0: random, 1: off, otherwise use provided number
+  Int_t  fUserDataRecoPass;            // forced DATA reco pass
+  ULong_t fRandomSeed;                 /// random seed required for tune on data, 0: random, 1: off, otherwise use provided number
   
   //
   void SetRecoInfo();
