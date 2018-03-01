@@ -750,20 +750,8 @@ Bool_t AliTPCPIDResponse::ResponseFunctiondEdxN( const AliVTrack* track,
     nPoints = track->GetTPCsignalN();
     gainScenario = kDefault;
     
-    if (fEnableMultSplines && fCurrentEventMultiplicity > 0) {
-      Int_t i=0;
-      // Loop through the Mult Bins until the current multiplicity is larger than the upper edge - then dont increase the bin Number and take the appropriate array
-      while (i < fMultResponseFunctions.GetEntriesFast() && fCurrentEventMultiplicity > fMultBins->At(2*i+1)) {
-        i++;
-      }
-      TObjArray* arr = (TObjArray*)fMultResponseFunctions.UncheckedAt(i);
-      if (!arr)
-        obj = fResponseFunctions.UncheckedAt(ResponseFunctionIndex(species,gainScenario));
-    }
-    //Default case
-    if (!obj) {
-      obj = fResponseFunctions.UncheckedAt(ResponseFunctionIndex(species,gainScenario));
-    }
+    //If different Multiplicity Splines: Correct splines will be selected at the beginning of each event
+    obj = fResponseFunctions.UncheckedAt(ResponseFunctionIndex(species,gainScenario));
   }
   else {
     //TODO Proper handle of tuneMConData for other dEdx sources
@@ -2050,4 +2038,18 @@ TString AliTPCPIDResponse::GetChecksum(const TObject* obj)
   gSystem->Exec(Form("rm -rf %s", uniquePathName.Data()));
 
   return checksum;
+}
+
+void AliTPCPIDResponse::ChooseSplineForMultiplicity() {
+  if (!fEnableMultSplines || fCurrentEventMultiplicity <= 0)
+    return;
+
+  Int_t i=0;
+  // Loop through the Mult Bins until the current multiplicity is larger than the upper edge - then dont increase the bin Number and take the appropriate array
+  while (i < fMultResponseFunctions.GetEntriesFast() && fCurrentEventMultiplicity > fMultBins->At(2*i+1)) {
+    i++;
+  }
+  TObjArray* arr = (TObjArray*)fMultResponseFunctions.UncheckedAt(i);
+  if (arr)
+    SetSplinesFromArray(arr, 0x0, kFALSE);
 }
