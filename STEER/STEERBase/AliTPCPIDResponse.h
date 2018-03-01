@@ -249,7 +249,7 @@ public:
                       const char* oadbFile="$ALICE_PHYSICS/OADB/COMMON/PID/data/TPCPIDResponseOADB.root",
                       Bool_t initMultiplicityCorrection=kTRUE);
 
-  Bool_t SetSplinesFromArray                (const TObjArray* arrSplines, TObjArray* targetarray = 0x0);
+  Bool_t SetSplinesFromArray                (const TObjArray* arrSplines, TObjArray* targetarray = 0x0, Bool_t verbose = kTRUE);
   Bool_t SetMultiplicityCorrectionFromString(const TString& multiplicityData);
   Bool_t SetdEdxTypeFromString              (const TString& dEdxTypeSet);
   Bool_t SetdEdxResolutionFromString        (const TString& dEdxTypeSet);
@@ -259,6 +259,7 @@ public:
   //===| Helpers |==============================================================
   static TString GetChecksum(const TObject* obj);
   static TObjArray* GetMultiplicityCorrectionArrayFromString(const TString& corrections);
+  void ChooseSplineForMultiplicity();
 
 protected:
   Double_t GetExpectedSignal(const AliVTrack* track,
