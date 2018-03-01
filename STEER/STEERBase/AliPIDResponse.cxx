@@ -617,6 +617,8 @@ void AliPIDResponse::InitialiseEvent(AliVEvent *event, Int_t pass, TString recoP
       numESDtracks = 0;
     }
     fTPCResponse.SetCurrentEventMultiplicity(numESDtracks);
+    if (GetTPCResponse().GetEnableMultSplines()) {
+      fTPCResponse.ChooseSplineForMultiplicity();
   }
   else
     fTPCResponse.SetCurrentEventMultiplicity(0);
