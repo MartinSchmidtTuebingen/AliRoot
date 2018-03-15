@@ -27,9 +27,9 @@
 #include "AliVTrack.h"
 
 class TH2D;
+class TH1I;
 class TSpline3;
 class AliOADBContainer;
-class TArrayI;
 
 class AliTPCPIDResponse: public TNamed {
 public:
@@ -149,6 +149,8 @@ public:
   
   Double_t GetSigmaPar1Fast(const AliVTrack *track, AliPID::EParticleType species,
                             Double_t dEdx, const TSpline3* responseFunction) const;
+                            
+                            TH1I* GetMultBins() {return fhMultBins;};
   
   //NEW
   void SetSigma(Float_t res0, Float_t resN2, ETPCgainScenario gainScenario );
@@ -260,7 +262,8 @@ public:
   static TString GetChecksum(const TObject* obj);
   static TObjArray* GetMultiplicityCorrectionArrayFromString(const TString& corrections);
   void ChooseSplineForMultiplicity();
-
+  TSpline3* MixSplines(TSpline3* firstSpline, TSpline3* secondSpline, Double_t firstweight);
+  
 protected:
   Double_t GetExpectedSignal(const AliVTrack* track,
                              AliPID::EParticleType species,
@@ -294,7 +297,7 @@ private:
   Bool_t fUseDatabase; // flag if fine-tuned database-response or simple ALEPH BB should be used
   
   Bool_t fEnableMultSplines;
-  TArrayI* fMultBins;
+  TH1I* fhMultBins;
   TObjArray fMultResponseFunctions;
   TObjArray fResponseFunctions; //! ObjArray of response functions individually for each particle
   AliOADBContainer* fOADBContainer; //! OADB container with response functions
