@@ -45,7 +45,8 @@
 #include "AliOADBContainer.h"
 #include "TFile.h"
 #include "TSpline.h"
-#include "TArrayI.h"
+#include "TH1I.h"
+#include "TH1F.h"
 
 ClassImp(AliTPCPIDResponse);
 
@@ -73,7 +74,7 @@ AliTPCPIDResponse::AliTPCPIDResponse():
   fKp5(4.88663),
   fUseDatabase(kFALSE),
   fEnableMultSplines(kFALSE),
-  fMultBins(0x0),
+  fhMultBins(0x0),
   fMultResponseFunctions(0),
   fResponseFunctions(fgkNumberOfParticleSpecies*fgkNumberOfGainScenarios),
   fOADBContainer(0x0),
@@ -115,7 +116,6 @@ AliTPCPIDResponse::AliTPCPIDResponse():
   fCorrFuncSigmaMultiplicity = new TF1("fCorrFuncSigmaMultiplicity",
                                        "TMath::Max(0.0, [0] + [1]*TMath::Min(x, [3]) + [2] * TMath::Power(TMath::Min(x, [3]), 2))", 0., 0.2);
 
-  fMultBins = new TArrayI(0);
   ResetMultiplicityCorrectionFunctions();
   fgInstance=this;
 }
@@ -176,7 +176,7 @@ AliTPCPIDResponse::~AliTPCPIDResponse()
 
   delete fOADBContainer;
   
-  delete fMultBins;
+  delete fhMultBins;
   
 }
 
@@ -194,7 +194,7 @@ AliTPCPIDResponse::AliTPCPIDResponse(const AliTPCPIDResponse& that):
   fKp5(that.fKp5),
   fUseDatabase(that.fUseDatabase),
   fEnableMultSplines(that.fEnableMultSplines),
-  fMultBins(that.fMultBins),
+  fhMultBins(that.fhMultBins),
   fMultResponseFunctions(that.fMultResponseFunctions),
   fResponseFunctions(that.fResponseFunctions),
   fOADBContainer(0x0),
@@ -263,7 +263,7 @@ AliTPCPIDResponse& AliTPCPIDResponse::operator=(const AliTPCPIDResponse& that)
   fKp5=that.fKp5;
   fUseDatabase=that.fUseDatabase;
   fEnableMultSplines=that.fEnableMultSplines;
-  fMultBins=that.fMultBins;
+  fhMultBins=that.fhMultBins;
   fMultResponseFunctions=that.fMultResponseFunctions;
   fResponseFunctions=that.fResponseFunctions;
   fOADBContainer=0x0;
@@ -1726,14 +1726,24 @@ Bool_t AliTPCPIDResponse::InitFromOADB(const Int_t run, const Int_t pass, TStrin
   
   // Set Splines for different multiplicities if present and required 
   if (hMultBins) {
-    fMultBins->Set(hMultBins->GetXaxis()->GetNbins());
-    for (Int_t i=1;i<=hMultBins->GetXaxis()->GetNbins();++i) {
-      fMultBins->AddAt(hMultBins->GetBinContent(i),i-1);
+    Int_t nMultBinsdouble = hMultBins->GetXaxis()->GetNbins();
+    delete fhMultBins;
+    Float_t* multBins = new Float_t[nMultBinsdouble - 1];
+    multBins[0] = 0;
+    for (Int_t i=1;i<nMultBinsdouble-2;i=i+2) {
+      Int_t low = hMultBins->GetBinContent(i+1);
+      Int_t high = hMultBins->GetBinContent(i+2);
+      Int_t mid = TMath::CeilNint((low+high)/2.0);
+      multBins[i] = TMath::Min(low, mid - 20);
+      multBins[i+1] = TMath::Max(high, mid + 20);
     }
+    
+    fhMultBins = new TH1I("multBins","multBins",nMultBinsdouble-2,multBins);
+    
     fMultResponseFunctions.SetOwner(kTRUE);
-    for (Int_t i=0;i<TMath::FloorNint(fMultBins->GetSize()/2 + 0.01);i++) {
+    for (Int_t i=0;i<TMath::FloorNint(nMultBinsdouble/2 + 0.01);i++) {
       TObjArray* multSplineArray = new TObjArray();
-      TObjArray* arrSplines = static_cast<TObjArray*>(arr->FindObject(TString::Format("TPCSplines_%i_%i",fMultBins->At(2*i),fMultBins->At(2*i+1)).Data()));
+      TObjArray* arrSplines = static_cast<TObjArray*>(arr->FindObject(TString::Format("TPCSplines_%i_%i",(Int_t)hMultBins->GetBinContent(2*i+1),(Int_t)hMultBins->GetBinContent(2*i+2)).Data()));
       SetSplinesFromArray(arrSplines, multSplineArray);
       fMultResponseFunctions.AddAtAndExpand(multSplineArray,i);
       if (i==0) {
@@ -1741,12 +1751,12 @@ Bool_t AliTPCPIDResponse::InitFromOADB(const Int_t run, const Int_t pass, TStrin
         SetSplinesFromArray(arrSplines);
       }
     }
-    for (Int_t i=1;i<fMultBins->GetSize()-1;i=i+2) {
-      Int_t mid = TMath::FloorNint((fMultBins->At(i) + fMultBins->At(i+1))/2.0);
-      fMultBins->AddAt(mid,i);
-      fMultBins->AddAt(mid,i+1);
+    for (Int_t i=1;i<fhMultBins->GetSize()-1;i=i+2) {
+      Int_t mid = TMath::FloorNint((fhMultBins->At(i) + fhMultBins->At(i+1))/2.0);
+      fhMultBins->AddAt(mid,i);
+      fhMultBins->AddAt(mid,i+1);
     }
-    fMultBins->AddAt(1000000,fMultBins->GetSize()-1);
+    fhMultBins->AddAt(1000000,fhMultBins->GetSize()-1);
     hMultBins = 0x0;
     SetEnableMultSplines(kTRUE);
   }
@@ -1793,7 +1803,7 @@ Bool_t AliTPCPIDResponse::InitFromOADB(const Int_t run, const Int_t pass, TStrin
 }
 
 //______________________________________________________________________________
-Bool_t AliTPCPIDResponse::SetSplinesFromArray(const TObjArray* arrSplines, TObjArray* targetarray)
+Bool_t AliTPCPIDResponse::SetSplinesFromArray(const TObjArray* arrSplines, TObjArray* targetarray, Bool_t verbose)
 {
   // Set up internal spline array from order array of splines 'arrSplines'
   // arrSplines is assumes to have the splines for the single particles inc
@@ -1840,8 +1850,10 @@ Bool_t AliTPCPIDResponse::SetSplinesFromArray(const TObjArray* arrSplines, TObjA
     else {
       SetResponseFunction((AliPID::EParticleType)ispecie, responseFunction);
     }
-    AliInfo(Form("Adding spline: %d - %s (MD5(spline) = %s)",ispecie,responseFunction->GetName(),
+    if (verbose) {
+      AliInfo(Form("Adding spline: %d - %s (MD5(spline) = %s)",ispecie,responseFunction->GetName(),
                  GetChecksum(responseFunction).Data()));
+    }
 
   }
 
@@ -2043,13 +2055,52 @@ TString AliTPCPIDResponse::GetChecksum(const TObject* obj)
 void AliTPCPIDResponse::ChooseSplineForMultiplicity() {
   if (!fEnableMultSplines || fCurrentEventMultiplicity <= 0)
     return;
-
-  Int_t i=0;
-  // Loop through the Mult Bins until the current multiplicity is larger than the upper edge - then dont increase the bin Number and take the appropriate array
-  while (i < fMultResponseFunctions.GetEntriesFast() && fCurrentEventMultiplicity > fMultBins->At(2*i+1)) {
-    i++;
+  
+  Int_t multBin = fhMultBins->GetXaxis()->FindFixBin(fCurrentEventMultiplicity);
+  
+  TObjArray* arr = 0x0;
+  
+  if (TMath::Odd(multBin)) {
+    arr = (TObjArray*)fMultResponseFunctions.UncheckedAt((multBin-1)/2);
   }
-  TObjArray* arr = (TObjArray*)fMultResponseFunctions.UncheckedAt(i);
+  else {
+    Double_t scalefactor = (fCurrentEventMultiplicity - fhMultBins->GetXaxis()->GetBinLowEdge(multBin))/(fhMultBins->GetXaxis()->GetBinUpEdge(multBin) - fhMultBins->GetXaxis()->GetBinLowEdge(multBin));
+    arr = new TObjArray();
+    TObjArray* lowMultArr = (TObjArray*)fMultResponseFunctions.UncheckedAt(multBin/2-1);
+    TObjArray* highMultArr = (TObjArray*)fMultResponseFunctions.UncheckedAt(multBin/2);
+    for (Int_t ispecie=0; ispecie<AliPID::kSPECIESC; ++ispecie) {
+      TSpline3 *responseFunctionlowMult = static_cast<TSpline3*>(lowMultArr->At(ispecie));
+      TSpline3 *responseFunctionhighMult = static_cast<TSpline3*>(highMultArr->At(ispecie));
+      if (!responseFunctionlowMult || !responseFunctionhighMult)
+        continue;
+      
+      arr->AddAtAndExpand(MixSplines(responseFunctionlowMult,responseFunctionhighMult,1.0 - scalefactor),ispecie);
+    }
+  }
   if (arr)
     SetSplinesFromArray(arr, 0x0, kFALSE);
+}
+
+
+TSpline3* AliTPCPIDResponse::MixSplines(TSpline3* firstSpline, TSpline3* secondSpline, Double_t firstweight) {
+  Double_t xmin = firstSpline->GetXmin();
+  Double_t xmax = firstSpline->GetXmax();
+  Int_t n = firstSpline->GetNpx();
+  Double_t xlogmin = TMath::Log10(xmin);
+  Double_t xlogmax = TMath::Log10(xmax);  
+  Double_t dlogx = (xlogmax-xlogmin)/((Double_t)n);
+  Double_t xv;
+  Double_t* xbins = new Double_t[n+1];
+  for (Int_t i=0;i<=n;i++) {
+    xbins[i] = Double_t(TMath::Exp(2.302585092994*(xlogmin+i*dlogx)));
+  }
+  TH1F* h = new TH1F("Spline","h",n,xbins);
+  for (Int_t i=1;i<=n;i++) {
+    xv = h->GetBinCenter(i);
+    h->SetBinContent(i,firstweight * firstSpline->Eval(xv) + (1.0 - firstweight) * secondSpline->Eval(xv));
+  }
+
+  TSpline3* spline = new TSpline3(h);
+  return spline;
+
 }
