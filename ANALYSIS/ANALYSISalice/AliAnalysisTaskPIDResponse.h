@@ -53,7 +53,7 @@ public:
   Bool_t UseTPCMultiplicityCorrection() const { return fUseTPCMultiplicityCorrection; };
 
   void SetEnableMultSplines(Bool_t enableMultSplines = kTRUE) { fEnableMultSplines = enableMultSplines; };
-  Bool_t EnableMultSplines() const { return fEnableMultSplines; };  
+  Bool_t GetEnableMultSplines() const { return fEnableMultSplines; };  
 
   void SetUseTRDEtaCorrection(Bool_t useTRDEtaCorrection) { fUseTRDEtaCorrection = useTRDEtaCorrection; };
   Bool_t UseTRDEtaCorrection() const { return fUseTRDEtaCorrection; };
