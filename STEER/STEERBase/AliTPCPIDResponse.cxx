@@ -74,6 +74,7 @@ AliTPCPIDResponse::AliTPCPIDResponse():
   fKp5(4.88663),
   fUseDatabase(kFALSE),
   fEnableMultSplines(kFALSE),
+  fMixedSingleSpline(0x0),
   fhMultBins(0x0),
   fMultResponseFunctions(0),
   fResponseFunctions(fgkNumberOfParticleSpecies*fgkNumberOfGainScenarios),
@@ -194,6 +195,7 @@ AliTPCPIDResponse::AliTPCPIDResponse(const AliTPCPIDResponse& that):
   fKp5(that.fKp5),
   fUseDatabase(that.fUseDatabase),
   fEnableMultSplines(that.fEnableMultSplines),
+  fMixedSingleSpline(that.fMixedSingleSpline),
   fhMultBins(that.fhMultBins),
   fMultResponseFunctions(that.fMultResponseFunctions),
   fResponseFunctions(that.fResponseFunctions),
@@ -263,6 +265,7 @@ AliTPCPIDResponse& AliTPCPIDResponse::operator=(const AliTPCPIDResponse& that)
   fKp5=that.fKp5;
   fUseDatabase=that.fUseDatabase;
   fEnableMultSplines=that.fEnableMultSplines;
+  fMixedSingleSpline=that.fMixedSingleSpline;
   fhMultBins=that.fhMultBins;
   fMultResponseFunctions=that.fMultResponseFunctions;
   fResponseFunctions=that.fResponseFunctions;
@@ -527,7 +530,30 @@ TSpline3* AliTPCPIDResponse::GetResponseFunction( AliPID::EParticleType type,
                                                   AliTPCPIDResponse::ETPCgainScenario gainScenario ) const
 {
   //get response function
-  return dynamic_cast<TSpline3*>(fResponseFunctions.At(ResponseFunctionIndex(type,gainScenario)));
+  if (fEnableMultSplines) {
+    Int_t multBin = fhMultBins->GetXaxis()->FindFixBin(fCurrentEventMultiplicity);
+    
+    delete fMixedSingleSpline;
+    fMixedSingleSpline = 0x0;
+    
+    if (TMath::Odd(multBin)) {
+      TObjArray* arr = (TObjArray*)fMultResponseFunctions.UncheckedAt((multBin-1)/2);
+      return dynamic_cast<TSpline3*>(arr->At(ResponseFunctionIndex(type,AliTPCPIDResponse::kDefault)));
+    }
+    else {
+      Double_t scalefactor = (fCurrentEventMultiplicity - fhMultBins->GetXaxis()->GetBinLowEdge(multBin))/(fhMultBins->GetXaxis()->GetBinUpEdge(multBin) - fhMultBins->GetXaxis()->GetBinLowEdge(multBin));
+      
+      TObjArray* lowMultArr = (TObjArray*)fMultResponseFunctions.UncheckedAt(multBin/2-1);
+      TObjArray* highMultArr = (TObjArray*)fMultResponseFunctions.UncheckedAt(multBin/2);
+      TSpline3* responseFunctionlowMult = static_cast<TSpline3*>(lowMultArr->At(ResponseFunctionIndex(type,AliTPCPIDResponse::kDefault)));
+      TSpline3* responseFunctionhighMult = static_cast<TSpline3*>(highMultArr->At(ResponseFunctionIndex(type,AliTPCPIDResponse::kDefault)));
+      
+      fMixedSingleSpline = MixSplines(responseFunctionlowMult,responseFunctionhighMult,1.0 - scalefactor);
+      return fMixedSingleSpline;
+    }
+  }
+  else
+    return dynamic_cast<TSpline3*>(fResponseFunctions.At(ResponseFunctionIndex(type,gainScenario)));
 }
 
 //_________________________________________________________________________
@@ -1725,7 +1751,7 @@ Bool_t AliTPCPIDResponse::InitFromOADB(const Int_t run, const Int_t pass, TStrin
   TH1I* hMultBins = static_cast<TH1I*>(arr->FindObject("hMultBins"));
   
   // Set Splines for different multiplicities if present and required 
-  if (hMultBins) {
+  if (hMultBins && fEnableMultSplines) {
     Int_t nMultBinsdouble = hMultBins->GetXaxis()->GetNbins();
     delete fhMultBins;
     Float_t* multBins = new Float_t[nMultBinsdouble - 1];
@@ -2060,6 +2086,16 @@ void AliTPCPIDResponse::ChooseSplineForMultiplicity() {
   
   TObjArray* arr = 0x0;
   
+  if (fMixedSingleSpline) {
+    delete fMixedSingleSpline;
+    fMixedSingleSpline = 0x0;
+    for (Int_t i=0;i<fResponseFunctions.GetEntriesFast();i++)
+    {
+      delete fResponseFunctions.At(i);
+      fResponseFunctions.AddAt(0x0,i);
+    }    
+  }
+  
   if (TMath::Odd(multBin)) {
     arr = (TObjArray*)fMultResponseFunctions.UncheckedAt((multBin-1)/2);
   }
@@ -2076,13 +2112,14 @@ void AliTPCPIDResponse::ChooseSplineForMultiplicity() {
       
       arr->AddAtAndExpand(MixSplines(responseFunctionlowMult,responseFunctionhighMult,1.0 - scalefactor),ispecie);
     }
+    fMixedSingleSpline = (TSpline3*)arr->At(0);
   }
   if (arr)
     SetSplinesFromArray(arr, 0x0, kFALSE);
 }
 
 
-TSpline3* AliTPCPIDResponse::MixSplines(TSpline3* firstSpline, TSpline3* secondSpline, Double_t firstweight) {
+TSpline3* AliTPCPIDResponse::MixSplines(TSpline3* firstSpline, TSpline3* secondSpline, Double_t firstweight) const {
   Double_t xmin = firstSpline->GetXmin();
   Double_t xmax = firstSpline->GetXmax();
   Int_t n = firstSpline->GetNpx();
@@ -2094,13 +2131,14 @@ TSpline3* AliTPCPIDResponse::MixSplines(TSpline3* firstSpline, TSpline3* secondS
   for (Int_t i=0;i<=n;i++) {
     xbins[i] = Double_t(TMath::Exp(2.302585092994*(xlogmin+i*dlogx)));
   }
-  TH1F* h = new TH1F("Spline","h",n,xbins);
+  TH1F* h = new TH1F("Spline","hSpline",n,xbins);
   for (Int_t i=1;i<=n;i++) {
     xv = h->GetBinCenter(i);
     h->SetBinContent(i,firstweight * firstSpline->Eval(xv) + (1.0 - firstweight) * secondSpline->Eval(xv));
   }
 
   TSpline3* spline = new TSpline3(h);
+  delete h;
+  h = 0x0;
   return spline;
-
 }

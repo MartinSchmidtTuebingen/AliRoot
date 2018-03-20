@@ -262,7 +262,7 @@ public:
   static TString GetChecksum(const TObject* obj);
   static TObjArray* GetMultiplicityCorrectionArrayFromString(const TString& corrections);
   void ChooseSplineForMultiplicity();
-  TSpline3* MixSplines(TSpline3* firstSpline, TSpline3* secondSpline, Double_t firstweight);
+  TSpline3* MixSplines(TSpline3* firstSpline, TSpline3* secondSpline, Double_t firstweight) const;
   
 protected:
   Double_t GetExpectedSignal(const AliVTrack* track,
@@ -297,6 +297,7 @@ private:
   Bool_t fUseDatabase; // flag if fine-tuned database-response or simple ALEPH BB should be used
   
   Bool_t fEnableMultSplines;
+  mutable TSpline3* fMixedSingleSpline;
   TH1I* fhMultBins;
   TObjArray fMultResponseFunctions;
   TObjArray fResponseFunctions; //! ObjArray of response functions individually for each particle
@@ -323,7 +324,7 @@ private:
   TF1* fCorrFuncMultiplicity; //! Function to correct for the multiplicity dependence of the TPC dEdx
   TF1* fCorrFuncMultiplicityTanTheta; //! Function to correct the additional tanTheta dependence of the multiplicity dependence of the TPC dEdx
   TF1* fCorrFuncSigmaMultiplicity; //! Function to correct for the multiplicity dependence of the TPC dEdx resolution
-
+  
   // dEdx type information
   ETPCdEdxType     fdEdxType;         // source for dEdx information to use
   Int_t            fdEdxChargeType;   // charge type to use for dEdx calculation from AliTPCdEdxInfo
