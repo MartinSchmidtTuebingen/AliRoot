@@ -298,6 +298,7 @@ private:
   
   Bool_t fEnableMultSplines;
   mutable TSpline3* fMixedSingleSpline;
+  mutable Bool_t fMixedSplinesCreated;
   TH1I* fhMultBins;
   TObjArray fMultResponseFunctions;
   TObjArray fResponseFunctions; //! ObjArray of response functions individually for each particle

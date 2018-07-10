@@ -75,6 +75,7 @@ AliTPCPIDResponse::AliTPCPIDResponse():
   fUseDatabase(kFALSE),
   fEnableMultSplines(kFALSE),
   fMixedSingleSpline(0x0),
+  fMixedSplinesCreated(kFALSE),
   fhMultBins(0x0),
   fMultResponseFunctions(0),
   fResponseFunctions(fgkNumberOfParticleSpecies*fgkNumberOfGainScenarios),
@@ -179,6 +180,15 @@ AliTPCPIDResponse::~AliTPCPIDResponse()
   
   delete fhMultBins;
   
+  delete fMixedSingleSpline;
+  fMixedSingleSpline = 0x0;
+  
+  if (fMixedSplinesCreated) {
+    for (Int_t i=0;i<fResponseFunctions.GetEntriesFast();i++) {
+      delete fResponseFunctions.At(i);
+      fResponseFunctions.AddAt(0x0,i);
+    }
+  }
 }
 
 
@@ -196,6 +206,7 @@ AliTPCPIDResponse::AliTPCPIDResponse(const AliTPCPIDResponse& that):
   fUseDatabase(that.fUseDatabase),
   fEnableMultSplines(that.fEnableMultSplines),
   fMixedSingleSpline(that.fMixedSingleSpline),
+  fMixedSplinesCreated(that.fMixedSplinesCreated),
   fhMultBins(that.fhMultBins),
   fMultResponseFunctions(that.fMultResponseFunctions),
   fResponseFunctions(that.fResponseFunctions),
@@ -266,6 +277,7 @@ AliTPCPIDResponse& AliTPCPIDResponse::operator=(const AliTPCPIDResponse& that)
   fUseDatabase=that.fUseDatabase;
   fEnableMultSplines=that.fEnableMultSplines;
   fMixedSingleSpline=that.fMixedSingleSpline;
+  fMixedSplinesCreated=that.fMixedSplinesCreated;
   fhMultBins=that.fhMultBins;
   fMultResponseFunctions=that.fMultResponseFunctions;
   fResponseFunctions=that.fResponseFunctions;
@@ -2086,18 +2098,16 @@ void AliTPCPIDResponse::ChooseSplineForMultiplicity() {
   
   TObjArray* arr = 0x0;
   
-  if (fMixedSingleSpline) {
-    delete fMixedSingleSpline;
-    fMixedSingleSpline = 0x0;
-    for (Int_t i=0;i<fResponseFunctions.GetEntriesFast();i++)
-    {
+  if (fMixedSplinesCreated) {
+    for (Int_t i=0;i<fResponseFunctions.GetEntriesFast();i++) {
       delete fResponseFunctions.At(i);
       fResponseFunctions.AddAt(0x0,i);
-    }    
+    }
   }
   
   if (TMath::Odd(multBin)) {
     arr = (TObjArray*)fMultResponseFunctions.UncheckedAt((multBin-1)/2);
+    fMixedSplinesCreated = kFALSE;
   }
   else {
     Double_t scalefactor = (fCurrentEventMultiplicity - fhMultBins->GetXaxis()->GetBinLowEdge(multBin))/(fhMultBins->GetXaxis()->GetBinUpEdge(multBin) - fhMultBins->GetXaxis()->GetBinLowEdge(multBin));
@@ -2112,7 +2122,7 @@ void AliTPCPIDResponse::ChooseSplineForMultiplicity() {
       
       arr->AddAtAndExpand(MixSplines(responseFunctionlowMult,responseFunctionhighMult,1.0 - scalefactor),ispecie);
     }
-    fMixedSingleSpline = (TSpline3*)arr->At(0);
+    fMixedSplinesCreated = kTRUE;
   }
   if (arr)
     SetSplinesFromArray(arr, 0x0, kFALSE);
