@@ -2091,7 +2091,7 @@ TString AliTPCPIDResponse::GetChecksum(const TObject* obj)
 }
 
 void AliTPCPIDResponse::ChooseSplineForMultiplicity() {
-  if (!fEnableMultSplines || fCurrentEventMultiplicity <= 0)
+  if (!fEnableMultSplines || fhMultBins || fCurrentEventMultiplicity <= 0)
     return;
   
   Int_t multBin = fhMultBins->GetXaxis()->FindFixBin(fCurrentEventMultiplicity);
