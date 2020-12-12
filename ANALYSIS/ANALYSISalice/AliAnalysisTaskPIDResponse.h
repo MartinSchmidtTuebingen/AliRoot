@@ -5,14 +5,10 @@
  * See cxx source for full Copyright notice                               */
 
 /* $Id: AliAnalysisTaskPIDResponse.h 43642 2010-09-17 15:50:04Z wiechula $ */
-// Author: Jens Wiechula, 24/02/2011
-
-//==============================================================================
-//
-//
-//
-//
-//==============================================================================
+/// \class AliAnalysisTaskPIDResponse
+/// \brief \author Jens Wiechula
+///
+/// \date 24/02/2011
 
 #include <TVectorDfwd.h>
 #include <TString.h>
